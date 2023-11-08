@@ -41,13 +41,26 @@ func NewAwsHashR() *awsHashR {
 }
 
 // SetupClient setups client and loads configuration to config.
-func (a *awsHashR) SetupClient() error {
+func (a *awsHashR) SetupClient(instanceId string) error {
+	if instanceId == "" {
+		return fmt.Errorf("InstanceId is required")
+	}
+
 	a.config, err = config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return err
 	}
 
 	a.client = ec2.NewFromConfig(a.config)
+
+	instance, err := a.GetInstanceDetail(instanceId)
+	if err != nil {
+		return err
+	}
+
+	a.ec2PublicDnsName = *instance.PublicDnsName
+	a.ec2Keyname = *instance.KeyName
+	a.region = *instance.Placement.AvailabilityZone
 
 	return nil
 }
@@ -79,6 +92,40 @@ func (a *awsHashR) GetAmazonImages() ([]types.Image, error) {
 	}
 
 	return output.Images, nil
+}
+
+// GetInstanceDetail returns instance detail.
+func (a *awsHashR) GetInstanceDetail(instanceId string) (*types.Instance, error) {
+	log.Printf("Getting details of the instance %s", instanceId)
+
+	filterName := "instance-id"
+	filterValues := []string{instanceId}
+
+	input := &ec2.DescribeInstancesInput{
+		Filters: []types.Filter{
+			types.Filter{
+				Name:   &filterName,
+				Values: filterValues,
+			},
+		},
+	}
+
+	output, err := a.client.DescribeInstances(context.TODO(), input)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, reservation := range output.Reservations {
+		for _, instance := range reservation.Instances {
+			if *instance.InstanceId == instanceId {
+				return &instance, nil
+			}
+		}
+	}
+
+	//fmt.Println(output)
+
+	return nil, fmt.Errorf("Unable to find the instance %s", instanceId)
 }
 
 // CopyImage creates a copy of AMI to HashR project and returns the new AMI id.
@@ -312,13 +359,13 @@ func (a *awsHashR) waitForVolumeState(volumeId string, targetState types.VolumeS
 	for i := 0; i < maxWaitDuration; i++ {
 		state, err := a.GetVolumeState(volumeId)
 		if err != nil {
-			glog.Infof("Unabe to get the state of the volume %s: %v", volumeId, err)
+			log.Printf("Unabe to get the state of the volume %s: %v", volumeId, err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		if state == targetState {
-			glog.Infof("Volume %s is in the target state %s", volumeId, targetState)
+			log.Printf("Volume %s is in the target state %s", volumeId, targetState)
 			return nil
 		}
 	}
@@ -340,7 +387,7 @@ func (a *awsHashR) waitForAttachmentState(volumeId string, instanceId string, ta
 
 		for _, attachment := range attachments {
 			if attachment.State == targetState && *attachment.InstanceId == instanceId {
-				glog.Infof("Volume %s is attached to the instance %s in the state %s", volumeId, instanceId, targetState)
+				log.Printf("Volume %s is attached to the instance %s in the state %s", volumeId, instanceId, targetState)
 				return nil
 			}
 		}

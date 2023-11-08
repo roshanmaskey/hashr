@@ -33,7 +33,11 @@ func init() {
 
 	ahashr = NewAwsHashR()
 
-	if err := ahashr.SetupClient(); err != nil {
+	config := getTestingConfig("instance")
+	ahashr.instanceId = config["instanceid"].(string)
+	ahashr.ec2User = config["user"].(string)
+
+	if err := ahashr.SetupClient(ahashr.instanceId); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -46,6 +50,42 @@ func getTestingConfig(configname string) map[interface{}]interface{} {
 	}
 
 	return config.(map[interface{}]interface{})
+}
+
+func TestGetInstanceDetailPublicDnsName(t *testing.T) {
+	config := getTestingConfig("instance")
+	instanceId := config["instanceid"].(string)
+
+	instance, err := ahashr.GetInstanceDetail(instanceId)
+	assert.Nil(t, err)
+
+	assert.NotEqual(t, "", *instance.PublicDnsName)
+}
+
+func TestGetInstanceDetailKeyName(t *testing.T) {
+	config := getTestingConfig("instance")
+	instanceId := config["instanceid"].(string)
+
+	instance, err := ahashr.GetInstanceDetail(instanceId)
+	assert.Nil(t, err)
+
+	assert.NotEqual(t, "", *instance.KeyName)
+}
+
+func TestGetInstanceDetailPlacementAvailabilityZone(t *testing.T) {
+	config := getTestingConfig("instance")
+	instanceId := config["instanceid"].(string)
+
+	instance, err := ahashr.GetInstanceDetail(instanceId)
+	assert.Nil(t, err)
+
+	assert.NotEqual(t, "", *instance.Placement.AvailabilityZone)
+}
+
+func TestGetAmazonImages(t *testing.T) {
+	images, err := ahashr.GetAmazonImages()
+	assert.Nil(t, err)
+	assert.Greater(t, len(images), 0)
 }
 
 func TestCopyAndDeregisterImage(t *testing.T) {
@@ -101,10 +141,7 @@ func TestCreateVolume(t *testing.T) {
 	snapshotid := config["snapshotid"].(string)
 	disksize := int32(config["disksize"].(int))
 
-	instance := getTestingConfig("instance")
-	region := instance["region"].(string)
-
-	volumeid, err := ahashr.CreateVolume(snapshotid, disksize, region)
+	volumeid, err := ahashr.CreateVolume(snapshotid, disksize, ahashr.region)
 	assert.Nil(t, err)
 	assert.NotEqual(t, "", volumeid)
 
@@ -118,18 +155,14 @@ func TestAttachVolume(t *testing.T) {
 	disksize := int32(config["disksize"].(int))
 	deviceid := config["device"].(string)
 
-	instance := getTestingConfig("instance")
-	instanceid := instance["instanceid"].(string)
-	region := instance["region"].(string)
-
-	volumeid, err := ahashr.CreateVolume(snapshotid, int32(disksize), region)
+	volumeid, err := ahashr.CreateVolume(snapshotid, int32(disksize), ahashr.region)
 	assert.Nil(t, err)
 	assert.NotEqual(t, "", volumeid)
 
 	err = ahashr.waitForVolumeState(volumeid, types.VolumeStateAvailable, 600)
 	assert.Nil(t, err)
 
-	err = ahashr.AttachVolume(deviceid, instanceid, volumeid)
+	err = ahashr.AttachVolume(deviceid, ahashr.instanceId, volumeid)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -139,7 +172,7 @@ func TestAttachVolume(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Detach volume
-	err = ahashr.DetachVolume(deviceid, instanceid, volumeid)
+	err = ahashr.DetachVolume(deviceid, ahashr.instanceId, volumeid)
 	assert.Nil(t, err)
 
 	err = ahashr.waitForVolumeState(volumeid, types.VolumeStateAvailable, 600)
@@ -150,25 +183,13 @@ func TestAttachVolume(t *testing.T) {
 }
 
 func TestSSHClientSetup(t *testing.T) {
-	instance := getTestingConfig("instance")
-
-	keyname := instance["keyname"].(string)
-	server := instance["publicdnsname"].(string)
-	user := instance["user"].(string)
-
-	err := ahashr.SSHClientSetup(user, keyname, server)
+	err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName)
 	assert.Nil(t, err)
 	assert.NotNil(t, ahashr.sshclient)
 }
 
 func TestRunSSHCommand(t *testing.T) {
-	instance := getTestingConfig("instance")
-
-	keyname := instance["keyname"].(string)
-	server := instance["publicdnsname"].(string)
-	user := instance["user"].(string)
-
-	err := ahashr.SSHClientSetup(user, keyname, server)
+	err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName)
 	assert.Nil(t, err)
 
 	err = ahashr.RunSSHCommand("ls -lh ~/")
