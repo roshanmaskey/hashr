@@ -1,3 +1,21 @@
+/*
+Copyright 2023 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Unit tests for aws_hashr
+
 package aws
 
 import (
@@ -13,7 +31,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var ahashr *awsHashR
 var configdata map[string]interface{}
 
 func loadTestingConfig() {
@@ -28,10 +45,10 @@ func loadTestingConfig() {
 	}
 }
 
-func init() {
+func newAwsHashR() *awsHashR {
 	loadTestingConfig()
 
-	ahashr = NewAwsHashR()
+	ahashr := NewAwsHashR()
 
 	config := getTestingConfig("instance")
 	ahashr.instanceId = config["instanceid"].(string)
@@ -40,6 +57,8 @@ func init() {
 	if err := ahashr.SetupClient(ahashr.instanceId); err != nil {
 		log.Fatal(err)
 	}
+
+	return ahashr
 }
 
 func getTestingConfig(configname string) map[interface{}]interface{} {
@@ -53,9 +72,9 @@ func getTestingConfig(configname string) map[interface{}]interface{} {
 }
 
 func TestGetInstanceDetailPublicDnsName(t *testing.T) {
-	config := getTestingConfig("instance")
-	instanceId := config["instanceid"].(string)
+	ahashr := newAwsHashR()
 
+	instanceId := ahashr.instanceId
 	instance, err := ahashr.GetInstanceDetail(instanceId)
 	assert.Nil(t, err)
 
@@ -63,9 +82,9 @@ func TestGetInstanceDetailPublicDnsName(t *testing.T) {
 }
 
 func TestGetInstanceDetailKeyName(t *testing.T) {
-	config := getTestingConfig("instance")
-	instanceId := config["instanceid"].(string)
+	ahashr := newAwsHashR()
 
+	instanceId := ahashr.instanceId
 	instance, err := ahashr.GetInstanceDetail(instanceId)
 	assert.Nil(t, err)
 
@@ -73,9 +92,9 @@ func TestGetInstanceDetailKeyName(t *testing.T) {
 }
 
 func TestGetInstanceDetailPlacementAvailabilityZone(t *testing.T) {
-	config := getTestingConfig("instance")
-	instanceId := config["instanceid"].(string)
+	ahashr := newAwsHashR()
 
+	instanceId := ahashr.instanceId
 	instance, err := ahashr.GetInstanceDetail(instanceId)
 	assert.Nil(t, err)
 
@@ -83,12 +102,15 @@ func TestGetInstanceDetailPlacementAvailabilityZone(t *testing.T) {
 }
 
 func TestGetAmazonImages(t *testing.T) {
-	images, err := ahashr.GetAmazonImages()
+	ahashr := newAwsHashR()
+
+	images, err := ahashr.GetAmazonImages("ubuntu")
 	assert.Nil(t, err)
 	assert.Greater(t, len(images), 0)
 }
 
 func TestCopyAndDeregisterImage(t *testing.T) {
+	ahashr := newAwsHashR()
 
 	config := getTestingConfig("copyandderegisterimage")
 	sourceimageid := config["sourceimageid"].(string)
@@ -106,6 +128,8 @@ func TestCopyAndDeregisterImage(t *testing.T) {
 }
 
 func TestVolumeState(t *testing.T) {
+	ahashr := newAwsHashR()
+
 	config := getTestingConfig("volumestate")
 	volumeid := config["volumeid"].(string)
 
@@ -115,6 +139,8 @@ func TestVolumeState(t *testing.T) {
 }
 
 func TestSnapshotState(t *testing.T) {
+	ahashr := newAwsHashR()
+
 	config := getTestingConfig("snapshotstate")
 	snapshotid := config["snapshotid"].(string)
 
@@ -124,6 +150,8 @@ func TestSnapshotState(t *testing.T) {
 }
 
 func TestGetImageDetail(t *testing.T) {
+	ahashr := newAwsHashR()
+
 	config := getTestingConfig("getimagedetail")
 	sourceimageid := config["sourceimageid"].(string)
 	targetimagename := config["targetimagename"].(string)
@@ -137,6 +165,8 @@ func TestGetImageDetail(t *testing.T) {
 }
 
 func TestCreateVolume(t *testing.T) {
+	ahashr := newAwsHashR()
+
 	config := getTestingConfig("createvolume")
 	snapshotid := config["snapshotid"].(string)
 	disksize := int32(config["disksize"].(int))
@@ -150,6 +180,8 @@ func TestCreateVolume(t *testing.T) {
 }
 
 func TestAttachVolume(t *testing.T) {
+	ahashr := newAwsHashR()
+
 	config := getTestingConfig("attachvolume")
 	snapshotid := config["snapshotid"].(string)
 	disksize := int32(config["disksize"].(int))
@@ -183,12 +215,16 @@ func TestAttachVolume(t *testing.T) {
 }
 
 func TestSSHClientSetup(t *testing.T) {
+	ahashr := newAwsHashR()
+
 	err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName)
 	assert.Nil(t, err)
 	assert.NotNil(t, ahashr.sshclient)
 }
 
 func TestRunSSHCommand(t *testing.T) {
+	ahashr := newAwsHashR()
+
 	err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName)
 	assert.Nil(t, err)
 

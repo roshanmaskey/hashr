@@ -1,3 +1,19 @@
+/*
+Copyright 2023 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Experimental codes for AWS HashR
 package aws
 
@@ -8,6 +24,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -69,8 +86,8 @@ func (a *awsHashR) GetRegion() string {
 	return a.config.Region
 }
 
-// GetAmazonImageList returns the active AMIs owned by Amazon.
-func (a *awsHashR) GetAmazonImages() ([]types.Image, error) {
+// GetAmazonImages returns the active AMIs owned by Amazon.
+func (a *awsHashR) GetAmazonImages(osname string) ([]types.Image, error) {
 	filterName := "owner-alias"
 	filterValues := []string{"amazon"}
 	flagFalse := false
@@ -91,7 +108,22 @@ func (a *awsHashR) GetAmazonImages() ([]types.Image, error) {
 		return nil, fmt.Errorf("Error getting image list: %v", err)
 	}
 
-	return output.Images, nil
+	var outputImages []types.Image
+
+	osname = strings.ToLower(osname)
+	for _, image := range output.Images {
+		if image.Name != nil && strings.Contains(strings.ToLower(*image.Name), osname) {
+			outputImages = append(outputImages, image)
+			continue
+		}
+
+		if image.Description != nil && strings.Contains(strings.ToLower(*image.Description), osname) {
+			outputImages = append(outputImages, image)
+			continue
+		}
+	}
+
+	return outputImages, nil
 }
 
 // GetInstanceDetail returns instance detail.
