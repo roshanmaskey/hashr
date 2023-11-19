@@ -34,7 +34,7 @@ import (
 var configdata map[string]interface{}
 
 func loadTestingConfig() {
-	configfile := filepath.Join("..", "..", "data", "test_config.yaml")
+	configfile := filepath.Join("testdata", "test_config.yaml")
 	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
 		log.Fatalf("failed reading config file: %v", err)
@@ -45,7 +45,7 @@ func loadTestingConfig() {
 	}
 }
 
-func newAwsHashR() *awsHashR {
+func newTestAwsHashR() *awsHashR {
 	loadTestingConfig()
 
 	ahashr := NewAwsHashR()
@@ -72,7 +72,7 @@ func getTestingConfig(configname string) map[interface{}]interface{} {
 }
 
 func TestGetInstanceDetailPublicDnsName(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	instanceId := ahashr.instanceId
 	instance, err := ahashr.GetInstanceDetail(instanceId)
@@ -82,7 +82,7 @@ func TestGetInstanceDetailPublicDnsName(t *testing.T) {
 }
 
 func TestGetInstanceDetailKeyName(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	instanceId := ahashr.instanceId
 	instance, err := ahashr.GetInstanceDetail(instanceId)
@@ -92,7 +92,7 @@ func TestGetInstanceDetailKeyName(t *testing.T) {
 }
 
 func TestGetInstanceDetailPlacementAvailabilityZone(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	instanceId := ahashr.instanceId
 	instance, err := ahashr.GetInstanceDetail(instanceId)
@@ -102,7 +102,7 @@ func TestGetInstanceDetailPlacementAvailabilityZone(t *testing.T) {
 }
 
 func TestGetAmazonImages(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	images, err := ahashr.GetAmazonImages("ubuntu")
 	assert.Nil(t, err)
@@ -110,7 +110,7 @@ func TestGetAmazonImages(t *testing.T) {
 }
 
 func TestCopyAndDeregisterImage(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	config := getTestingConfig("copyandderegisterimage")
 	sourceimageid := config["sourceimageid"].(string)
@@ -128,7 +128,7 @@ func TestCopyAndDeregisterImage(t *testing.T) {
 }
 
 func TestVolumeState(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	config := getTestingConfig("volumestate")
 	volumeid := config["volumeid"].(string)
@@ -139,7 +139,7 @@ func TestVolumeState(t *testing.T) {
 }
 
 func TestSnapshotState(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	config := getTestingConfig("snapshotstate")
 	snapshotid := config["snapshotid"].(string)
@@ -150,7 +150,7 @@ func TestSnapshotState(t *testing.T) {
 }
 
 func TestGetImageDetail(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	config := getTestingConfig("getimagedetail")
 	sourceimageid := config["sourceimageid"].(string)
@@ -165,7 +165,7 @@ func TestGetImageDetail(t *testing.T) {
 }
 
 func TestCreateVolume(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	config := getTestingConfig("createvolume")
 	snapshotid := config["snapshotid"].(string)
@@ -180,7 +180,7 @@ func TestCreateVolume(t *testing.T) {
 }
 
 func TestAttachVolume(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	config := getTestingConfig("attachvolume")
 	snapshotid := config["snapshotid"].(string)
@@ -215,7 +215,7 @@ func TestAttachVolume(t *testing.T) {
 }
 
 func TestSSHClientSetup(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName)
 	assert.Nil(t, err)
@@ -223,7 +223,7 @@ func TestSSHClientSetup(t *testing.T) {
 }
 
 func TestRunSSHCommand(t *testing.T) {
-	ahashr := newAwsHashR()
+	ahashr := newTestAwsHashR()
 
 	err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName)
 	assert.Nil(t, err)

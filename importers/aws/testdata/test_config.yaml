@@ -1,0 +1,34 @@
+instance:
+  instanceid: i-05d8eca3a4a3d43b7
+  keyname: aws-ec2-instance
+  region: ap-southeast-2b
+  user: ec2-user
+  publicdnsname: ec2-54-252-143-33.ap-southeast-2.compute.amazonaws.com
+copyandderegisterimage:
+  sourceimageid: ami-010337b01de905480
+  sourceregion: ap-southeast-2
+  targetimagename: copy-ami-010337b01de905480
+volumestate:
+  volumeid: vol-01e99032fb46d3c85
+snapshotstate:
+  snapshotid: snap-066ce08ffca5ef406
+getimagedetail:
+  sourceimageid: ami-00b89387e88d35b2b
+  targetimagename: al2023-ami-2023.2.20231011.0-kernel-6.1-x86_64
+createvolume:
+  snapshotid: snap-0b03bfe719210b8b8
+  disksize: 4
+attachvolume:
+  snapshotid: snap-0b03bfe719210b8b8
+  device: /dev/sdh
+  disksize: 4
+prepare:
+  sourceimageid: ami-010337b01de905480
+  sourceregion: ap-southeast-2
+  device: /dev/sdh
+  targetimagename: copy-ami-010337b01de905480
+generate:
+  sourceimageid: ami-010337b01de905480
+  sourceregion: ap-southeast-2
+  device: /dev/sdh
+  targetimagename: copy-ami-010337b01de905480

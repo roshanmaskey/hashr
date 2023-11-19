@@ -94,7 +94,7 @@ func (a *awsHashR) GetAmazonImages(osname string) ([]types.Image, error) {
 
 	input := &ec2.DescribeImagesInput{
 		Filters: []types.Filter{
-			types.Filter{
+			{
 				Name:   &filterName,
 				Values: filterValues,
 			},
@@ -105,7 +105,7 @@ func (a *awsHashR) GetAmazonImages(osname string) ([]types.Image, error) {
 
 	output, err := a.client.DescribeImages(context.TODO(), input)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting image list: %v", err)
+		return nil, fmt.Errorf("error getting image list: %v", err)
 	}
 
 	var outputImages []types.Image
@@ -135,7 +135,7 @@ func (a *awsHashR) GetInstanceDetail(instanceId string) (*types.Instance, error)
 
 	input := &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
-			types.Filter{
+			{
 				Name:   &filterName,
 				Values: filterValues,
 			},
@@ -157,7 +157,7 @@ func (a *awsHashR) GetInstanceDetail(instanceId string) (*types.Instance, error)
 
 	//fmt.Println(output)
 
-	return nil, fmt.Errorf("Unable to find the instance %s", instanceId)
+	return nil, fmt.Errorf("unable to find the instance %s", instanceId)
 }
 
 // CopyImage creates a copy of AMI to HashR project and returns the new AMI id.
@@ -172,7 +172,7 @@ func (a *awsHashR) CopyImage(sourceImageId string, sourceRegion string, targetIm
 
 	output, err := a.client.CopyImage(context.TODO(), input)
 	if err != nil {
-		return "", fmt.Errorf("Error copying image %s: %v", sourceImageId, err)
+		return "", fmt.Errorf("error copying image %s: %v", sourceImageId, err)
 	}
 
 	log.Printf("Copied image %s as image ID %s", sourceImageId, *output.ImageId)
@@ -207,11 +207,11 @@ func (a *awsHashR) GetImageDetail(imageId string) (*types.Image, error) {
 
 	output, err := a.client.DescribeImages(context.TODO(), input)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting details of the image %s: %v", imageId, err)
+		return nil, fmt.Errorf("error getting details of the image %s: %v", imageId, err)
 	}
 
 	if len(output.Images) != 1 {
-		return nil, fmt.Errorf("Expecting 1 image, received %d images", len(output.Images))
+		return nil, fmt.Errorf("expecting 1 image, received %d images", len(output.Images))
 	}
 
 	// default return
@@ -227,7 +227,7 @@ func (a *awsHashR) GetSnapshot(snapshotId string) (*types.Snapshot, error) {
 
 	input := &ec2.DescribeSnapshotsInput{
 		Filters: []types.Filter{
-			types.Filter{
+			{
 				Name:   &filterName,
 				Values: filterValues,
 			},
@@ -236,11 +236,11 @@ func (a *awsHashR) GetSnapshot(snapshotId string) (*types.Snapshot, error) {
 
 	output, err := a.client.DescribeSnapshots(context.TODO(), input)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting details of the snapshot %s: %v", snapshotId, err)
+		return nil, fmt.Errorf("error getting details of the snapshot %s: %v", snapshotId, err)
 	}
 
 	if len(output.Snapshots) != 1 {
-		return nil, fmt.Errorf("Expecting 1 snapshot, received %d snapshots", len(output.Snapshots))
+		return nil, fmt.Errorf("expecting 1 snapshot, received %d snapshots", len(output.Snapshots))
 	}
 
 	return &output.Snapshots[0], nil
@@ -271,7 +271,7 @@ func (a *awsHashR) CreateVolume(snapshotId string, diskSizeInGB int32, region st
 
 	output, err := a.client.CreateVolume(context.TODO(), input)
 	if err != nil {
-		return "", fmt.Errorf("Error creating a volume from the snapshot %s: %v", snapshotId, err)
+		return "", fmt.Errorf("error creating a volume from the snapshot %s: %v", snapshotId, err)
 	}
 
 	log.Printf("Created the volume %s from the snapshot %s", *output.VolumeId, snapshotId)
@@ -293,7 +293,7 @@ func (a *awsHashR) DeleteVolume(volumeId string) error {
 
 	_, err := a.client.DeleteVolume(context.TODO(), input)
 	if err != nil {
-		return fmt.Errorf("Error deleting the volume %s: %v", volumeId, err)
+		return fmt.Errorf("error deleting the volume %s: %v", volumeId, err)
 	}
 
 	log.Printf("Deleted the volume %s", volumeId)
@@ -309,7 +309,7 @@ func (a *awsHashR) GetVolumeDetail(volumeId string) (*types.Volume, error) {
 
 	input := &ec2.DescribeVolumesInput{
 		Filters: []types.Filter{
-			types.Filter{
+			{
 				Name:   &filterName,
 				Values: filterValues,
 			},
@@ -318,11 +318,11 @@ func (a *awsHashR) GetVolumeDetail(volumeId string) (*types.Volume, error) {
 
 	output, err := a.client.DescribeVolumes(context.TODO(), input)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting details of the volume %s: %v", volumeId, err)
+		return nil, fmt.Errorf("error getting details of the volume %s: %v", volumeId, err)
 	}
 
 	if len(output.Volumes) != 1 {
-		return nil, fmt.Errorf("Expecting 1 volume, recevied %d volumes", len(output.Volumes))
+		return nil, fmt.Errorf("expecting 1 volume, recevied %d volumes", len(output.Volumes))
 	}
 
 	return &output.Volumes[0], nil
@@ -360,7 +360,7 @@ func (a *awsHashR) AttachVolume(deviceId string, instanceId string, volumeId str
 
 	output, err := a.client.AttachVolume(context.TODO(), input)
 	if err != nil {
-		return fmt.Errorf("Error attaching the volume %s to the instance %s: %v", volumeId, instanceId, err)
+		return fmt.Errorf("error attaching the volume %s to the instance %s: %v", volumeId, instanceId, err)
 	}
 
 	log.Printf("Attached the volume %s to the instance %s as the device %s", volumeId, instanceId, *output.Device)
@@ -380,7 +380,7 @@ func (a *awsHashR) DetachVolume(deviceId string, instanceId string, volumeId str
 
 	_, err := a.client.DetachVolume(context.TODO(), input)
 	if err != nil {
-		return fmt.Errorf("Error detaching the volume %s: %v", volumeId, err)
+		return fmt.Errorf("error detaching the volume %s: %v", volumeId, err)
 	}
 
 	return nil
@@ -402,7 +402,7 @@ func (a *awsHashR) waitForVolumeState(volumeId string, targetState types.VolumeS
 		}
 	}
 
-	return fmt.Errorf("Volume %s is not in the target state %s within %d seconds", volumeId, targetState, maxWaitDuration)
+	return fmt.Errorf("volume %s is not in the target state %s within %d seconds", volumeId, targetState, maxWaitDuration)
 }
 
 // waitForAttachmentState checks for the desired attachment state of the volume in the
@@ -425,7 +425,7 @@ func (a *awsHashR) waitForAttachmentState(volumeId string, instanceId string, ta
 		}
 	}
 
-	return fmt.Errorf("Volume %s did not attach to the instance %s within %d seconds", volumeId, instanceId, maxWaitDuration)
+	return fmt.Errorf("volume %s did not attach to the instance %s within %d seconds", volumeId, instanceId, maxWaitDuration)
 }
 
 // SSHClientSetup sets up SSH client to the EC2 instance.
@@ -433,16 +433,16 @@ func (a *awsHashR) SSHClientSetup(user string, keyname string, server string) er
 	// Setting up SSH
 	homedir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("Unable to get home directory: %v", err)
+		return fmt.Errorf("unable to get home directory: %v", err)
 	}
 
 	key, err := os.ReadFile(filepath.Join(homedir, ".ssh", keyname))
 	if err != nil {
-		return fmt.Errorf("Unable to get the SSH private key %s: %v", keyname, err)
+		return fmt.Errorf("unable to get the SSH private key %s: %v", keyname, err)
 	}
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		return fmt.Errorf("Unable to parse the SSH private key %s: %v", keyname, err)
+		return fmt.Errorf("unable to parse the SSH private key %s: %v", keyname, err)
 	}
 
 	sshconfig := &ssh.ClientConfig{
@@ -453,7 +453,7 @@ func (a *awsHashR) SSHClientSetup(user string, keyname string, server string) er
 
 	a.sshclient, err = ssh.Dial("tcp", fmt.Sprintf("%s:22", server), sshconfig)
 	if err != nil {
-		return fmt.Errorf("Unable to connect to the EC2 instance (%s): %v", server, err)
+		return fmt.Errorf("unable to connect to the EC2 instance (%s): %v", server, err)
 	}
 
 	return nil // default return
@@ -463,7 +463,7 @@ func (a *awsHashR) SSHClientSetup(user string, keyname string, server string) er
 func (a *awsHashR) RunSSHCommand(cmd string) error {
 	session, err := a.sshclient.NewSession()
 	if err != nil {
-		return fmt.Errorf("Error creating a SSH session: %v", err)
+		return fmt.Errorf("error creating a SSH session: %v", err)
 	}
 	defer session.Close()
 
@@ -471,7 +471,7 @@ func (a *awsHashR) RunSSHCommand(cmd string) error {
 	session.Stdout = &buf
 
 	if err = session.Run(cmd); err != nil {
-		return fmt.Errorf("Error running command on the remote instance: %v", err)
+		return fmt.Errorf("error running command on the remote instance: %v", err)
 	}
 
 	log.Println(buf.String())
