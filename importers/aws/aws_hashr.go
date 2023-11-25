@@ -31,16 +31,19 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/golang/glog"
 )
 
 var err error
 
 type awsHashR struct {
-	config aws.Config  // AWS configuration
-	client *ec2.Client // AWS API client
+	config   aws.Config  // AWS configuration
+	client   *ec2.Client // AWS API client
+	s3client *s3.Client  // S3 client
 
 	// Configuration parameters related to EC2 instance.
 	// EC2 instance is used for attaching volumes and creating disk archive.
@@ -79,11 +82,27 @@ func (a *awsHashR) SetupClient(instanceId string) error {
 	a.ec2Keyname = *instance.KeyName
 	a.region = *instance.Placement.AvailabilityZone
 
+	a.s3client = s3.NewFromConfig(a.config)
+
 	return nil
 }
 
-func (a *awsHashR) GetRegion() string {
-	return a.config.Region
+// GetAvailabilityZoneRegion returns the availability zone's region name.
+func (a *awsHashR) GetAvailabilityZoneRegion() (string, error) {
+	input := &ec2.DescribeAvailabilityZonesInput{}
+
+	output, err := a.client.DescribeAvailabilityZones(context.TODO(), input)
+	if err != nil {
+		return "", err
+	}
+
+	for _, zone := range output.AvailabilityZones {
+		if zone.RegionName != nil {
+			return *zone.RegionName, nil
+		}
+	}
+
+	return "", fmt.Errorf("no region name in the availability zone")
 }
 
 // GetAmazonImages returns the active AMIs owned by Amazon.
@@ -460,10 +479,10 @@ func (a *awsHashR) SSHClientSetup(user string, keyname string, server string) er
 }
 
 // RunSSHCommand runs commands on remote EC2 instance.
-func (a *awsHashR) RunSSHCommand(cmd string) error {
+func (a *awsHashR) RunSSHCommand(cmd string) (string, error) {
 	session, err := a.sshclient.NewSession()
 	if err != nil {
-		return fmt.Errorf("error creating a SSH session: %v", err)
+		return "", fmt.Errorf("error creating a SSH session: %v", err)
 	}
 	defer session.Close()
 
@@ -471,10 +490,31 @@ func (a *awsHashR) RunSSHCommand(cmd string) error {
 	session.Stdout = &buf
 
 	if err = session.Run(cmd); err != nil {
-		return fmt.Errorf("error running command on the remote instance: %v", err)
+		return "", fmt.Errorf("error running command on the remote instance: %v", err)
 	}
 
-	log.Println(buf.String())
+	return buf.String(), nil // default return
+}
 
-	return nil // default return
+// DownloadImage downloads archive from HashR S3 bucket to local path.
+func (a *awsHashR) DownloadImage(bucketName string, archiveName string, outputFile string) error {
+	var partMiBs int64 = 10
+	downloader := manager.NewDownloader(a.s3client, func(d *manager.Downloader) {
+		d.PartSize = partMiBs * 1024 * 1024
+	})
+
+	outFile, err := os.Create(outputFile)
+	if err != nil {
+		return fmt.Errorf("error opening output file %s: %v", outputFile, err)
+	}
+
+	_, err = downloader.Download(context.TODO(), outFile, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(archiveName),
+	})
+	if err != nil {
+		return fmt.Errorf("error downloading %s: %v", archiveName, err)
+	}
+
+	return nil // default
 }

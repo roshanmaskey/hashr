@@ -214,6 +214,18 @@ func TestAttachVolume(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestDownloadImage(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	config := getTestingConfig("downloadimage")
+	bucketName := config["bucketname"].(string)
+	archiveName := config["archivename"].(string)
+	outputFile := filepath.Join("/tmp", archiveName)
+
+	err := ahashr.DownloadImage(bucketName, archiveName, outputFile)
+	assert.Nil(t, err)
+}
+
 func TestSSHClientSetup(t *testing.T) {
 	ahashr := newTestAwsHashR()
 
@@ -228,6 +240,6 @@ func TestRunSSHCommand(t *testing.T) {
 	err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName)
 	assert.Nil(t, err)
 
-	err = ahashr.RunSSHCommand("ls -lh ~/")
+	_, err = ahashr.RunSSHCommand("ls -lh ~/")
 	assert.Nil(t, err)
 }
