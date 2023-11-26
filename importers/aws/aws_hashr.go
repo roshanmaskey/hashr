@@ -63,7 +63,7 @@ func NewAwsHashR() *awsHashR {
 // SetupClient setups client and loads configuration to config.
 func (a *awsHashR) SetupClient(instanceId string) error {
 	if instanceId == "" {
-		return fmt.Errorf("InstanceId is required")
+		return fmt.Errorf("instance ID is required")
 	}
 
 	a.config, err = config.LoadDefaultConfig(context.TODO())
@@ -519,8 +519,8 @@ func (a *awsHashR) DownloadImage(bucketName string, archiveName string, outputFi
 	return nil // default
 }
 
-// GetAvailableHashRDeviceName returns an available /dev/hrd? device
-func (a *awsHashR) GetAvailableHashRDeviceName() (string, error) {
+// GetAvailableDeviceName returns an available /dev/hrd? device
+func (a *awsHashR) GetAvailableDeviceName() (string, error) {
 	deviceIds := []string{"i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"}
 	output, err := a.RunSSHCommand("ls /dev/sd* | egrep -v '.*[0-9]$'")
 	if err != nil {

@@ -259,7 +259,7 @@ func TestRunSSHCommand(t *testing.T) {
 func TestGetAvailableHashRDeviceName(t *testing.T) {
 	ahashr := newTestAwsHashR()
 
-	o, err := ahashr.GetAvailableHashRDeviceName()
+	o, err := ahashr.GetAvailableDeviceName()
 	assert.Nil(t, err)
 	assert.NotEqual(t, "", o)
 }

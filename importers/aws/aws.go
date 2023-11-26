@@ -163,7 +163,9 @@ type Repo struct {
 func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []string, maxWaitDuration int, bucketName string, localPath string, remotePath string) (*Repo, error) {
 	// Setup awsHashR object ahashr
 	ahashr = NewAwsHashR()
-	ahashr.SetupClient(instanceId)
+	if err:= ahashr.SetupClient(instanceId); err != nil {
+		log.Fatal(err)
+	}
 
 	return &Repo{
 		osName:     osName,
@@ -313,7 +315,7 @@ func (a *AwsImage) generate() error {
 	}
 
 	// Step 3: Attach and create disk
-	a.deviceName, err = ahashr.GetAvailableHashRDeviceName()
+	a.deviceName, err = ahashr.GetAvailableDeviceName()
 	if err != nil {
 		return fmt.Errorf("error getting available device name to attach volume %s: %v", volumeId, err)
 	}
