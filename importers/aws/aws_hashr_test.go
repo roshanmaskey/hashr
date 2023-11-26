@@ -58,6 +58,10 @@ func newTestAwsHashR() *awsHashR {
 		log.Fatal(err)
 	}
 
+	if err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName); err != nil {
+		log.Fatal(err)
+	}
+
 	return ahashr
 }
 
@@ -214,6 +218,14 @@ func TestAttachVolume(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestGetAvailabilityZoneRegion(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	region, err := ahashr.GetAvailabilityZoneRegion()
+	assert.Nil(t, err)
+	assert.NotEqual(t, "", region)
+}
+
 func TestDownloadImage(t *testing.T) {
 	ahashr := newTestAwsHashR()
 
@@ -242,4 +254,12 @@ func TestRunSSHCommand(t *testing.T) {
 
 	_, err = ahashr.RunSSHCommand("ls -lh ~/")
 	assert.Nil(t, err)
+}
+
+func TestGetAvailableHashRDeviceName(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	o, err := ahashr.GetAvailableHashRDeviceName()
+	assert.Nil(t, err)
+	assert.NotEqual(t, "", o)
 }

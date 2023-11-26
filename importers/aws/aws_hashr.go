@@ -209,7 +209,7 @@ func (a *awsHashR) DeregisterImage(imageId string) error {
 
 	_, err := a.client.DeregisterImage(context.TODO(), input)
 	if err != nil {
-		fmt.Errorf("Error deregistering image %s: %v", imageId, err)
+		return fmt.Errorf("error deregistering image %s: %v", imageId, err)
 	}
 
 	log.Printf("Deregistered image %s", imageId)
@@ -321,8 +321,6 @@ func (a *awsHashR) DeleteVolume(volumeId string) error {
 
 // GetVolumeDetail returns the details of the specified volume.
 func (a *awsHashR) GetVolumeDetail(volumeId string) (*types.Volume, error) {
-	//log.Printf("Getting details of the volume %s", volumeId)
-
 	filterName := "volume-id"
 	filterValues := []string{volumeId}
 
@@ -442,6 +440,8 @@ func (a *awsHashR) waitForAttachmentState(volumeId string, instanceId string, ta
 				return nil
 			}
 		}
+
+		time.Sleep(1 * time.Second)
 	}
 
 	return fmt.Errorf("volume %s did not attach to the instance %s within %d seconds", volumeId, instanceId, maxWaitDuration)
@@ -517,4 +517,30 @@ func (a *awsHashR) DownloadImage(bucketName string, archiveName string, outputFi
 	}
 
 	return nil // default
+}
+
+// GetAvailableHashRDeviceName returns an available /dev/hrd? device
+func (a *awsHashR) GetAvailableHashRDeviceName() (string, error) {
+	deviceIds := []string{"i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"}
+	output, err := a.RunSSHCommand("ls /dev/sd* | egrep -v '.*[0-9]$'")
+	if err != nil {
+		return "/dev/sdh", nil
+	}
+
+	usedDevices := strings.Split(output, "\n")
+	for _, deviceId := range deviceIds {
+		deviceName := fmt.Sprintf("/dev/sd%s", deviceId)
+		used := false
+		for _, usedDevice := range usedDevices {
+			if deviceName == usedDevice {
+				used = true
+				break
+			}
+		}
+
+		if !used {
+			return deviceName, nil
+		}
+	}
+	return "", fmt.Errorf("no free device to use in attachment") // default
 }
