@@ -32,3 +32,11 @@ generate:
   sourceregion: ap-southeast-2
   device: /dev/sdh
   targetimagename: copy-ami-010337b01de905480
+downloadimage:
+  sourceimageid: ami-010337b01de905480
+  localpath: /tmp
+  remotepath: /home/ec2-user
+  devicename: /dev/sdh
+  maxWaitDuration: 600
+  bucketname: rmklab-export-bucket
+  archivename: sample-raw.dd.gz
