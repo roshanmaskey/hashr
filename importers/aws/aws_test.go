@@ -23,13 +23,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestDiscoverRepo(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	out, err := ahashr.GetAmazonImages("windows")
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, len(out), 915)
+}
+
 func TestPreprocess(t *testing.T) {
 	ahashr = newTestAwsHashR()
 	awsimage := NewAwsImage()
 
 	config := getTestingConfig("downloadimage")
-	//fmt.Println(config)
-	//fmt.Println(ahashr)
 
 	awsimage.sourceImageId = config["sourceimageid"].(string)
 	awsimage.archiveName = fmt.Sprintf("%s-raw.dd.gz", awsimage.sourceImageId)

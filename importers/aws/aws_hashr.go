@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Experimental codes for AWS HashR
 package aws
 
 import (
@@ -55,7 +54,7 @@ type awsHashR struct {
 	region           string      // target region of the instance
 }
 
-// NewAwsHashR returns a cient of awsHashR
+// NewAwsHashR returns a client of awsHashR
 func NewAwsHashR() *awsHashR {
 	return &awsHashR{}
 }
@@ -279,7 +278,7 @@ func (a *awsHashR) GetSnapshotState(snapshotId string) (types.SnapshotState, err
 
 // CreateVolume creates a volume based on the specified snapshot in the specified region.
 func (a *awsHashR) CreateVolume(snapshotId string, diskSizeInGB int32, region string) (string, error) {
-	log.Printf("Creating volume from snaphsot %s in the region %s", snapshotId, region)
+	log.Printf("Creating volume from snapshot %s in the region %s", snapshotId, region)
 
 	input := &ec2.CreateVolumeInput{
 		SnapshotId:       &snapshotId,
@@ -339,7 +338,7 @@ func (a *awsHashR) GetVolumeDetail(volumeId string) (*types.Volume, error) {
 	}
 
 	if len(output.Volumes) != 1 {
-		return nil, fmt.Errorf("expecting 1 volume, recevied %d volumes", len(output.Volumes))
+		return nil, fmt.Errorf("expecting 1 volume, received %d volumes", len(output.Volumes))
 	}
 
 	return &output.Volumes[0], nil
@@ -408,7 +407,7 @@ func (a *awsHashR) waitForVolumeState(volumeId string, targetState types.VolumeS
 	for i := 0; i < maxWaitDuration; i++ {
 		state, err := a.GetVolumeState(volumeId)
 		if err != nil {
-			log.Printf("Unabe to get the state of the volume %s: %v", volumeId, err)
+			log.Printf("Unable to get the state of the volume %s: %v", volumeId, err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -478,7 +477,7 @@ func (a *awsHashR) SSHClientSetup(user string, keyname string, server string) er
 	return nil // default return
 }
 
-// RunSSHCommand runs commands on remote EC2 instance.
+// RunSSHCommand runs commands on remote EC2 instances.
 func (a *awsHashR) RunSSHCommand(cmd string) (string, error) {
 	session, err := a.sshclient.NewSession()
 	if err != nil {
@@ -561,7 +560,7 @@ func (a *awsHashR) GetAvailableDeviceName() (string, error) {
 	return "", fmt.Errorf("no free device to use in attachment") // default
 }
 
-// VolumeExists checks if a given volume exists in HashR project.
+// VolumeExists checks if a given volume exists in the HashR project.
 func (a *awsHashR) VolumeExists(volumeId string) (bool, error) {
 	output, err := a.client.DescribeVolumes(context.TODO(), &ec2.DescribeVolumesInput{})
 	if err != nil {
@@ -577,7 +576,7 @@ func (a *awsHashR) VolumeExists(volumeId string) (bool, error) {
 	return false, nil
 }
 
-// ImageExists checks if a given image exists in HashR project.
+// ImageExists checks if a given image exists in the HashR project.
 func (a *awsHashR) ImageExists(imageId string) (bool, error) {
 	output, err := a.client.DescribeImages(context.TODO(), &ec2.DescribeImagesInput{})
 	if err != nil {

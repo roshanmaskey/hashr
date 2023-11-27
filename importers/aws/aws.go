@@ -106,7 +106,7 @@ func (a *AwsImage) QuickSHA256Hash() (string, error) {
 			return "", fmt.Errorf("source image ID is empty and source image object is nil")
 		}
 
-		// If we have source image ID, we can get the image details.
+		// If we have the source image ID, we can get the image details.
 		if ahashr == nil {
 			return "", fmt.Errorf("awsHashR object is not initialized")
 		}
@@ -255,7 +255,6 @@ func (a *AwsImage) copy() error {
 		return fmt.Errorf("source image does not exist")
 	}
 
-	// Step 1: Copy image to AWS HashR project
 	sourceRegion, err := ahashr.GetAvailabilityZoneRegion()
 	if err != nil {
 		return err
@@ -290,7 +289,6 @@ func (a *AwsImage) copy() error {
 }
 
 func (a *AwsImage) generate() error {
-	// Setp 2: Create volume from snapshot
 	var snapshotIds []string
 
 	for _, blockdevice := range a.image.BlockDeviceMappings {
@@ -298,7 +296,7 @@ func (a *AwsImage) generate() error {
 	}
 
 	if len(snapshotIds) == 0 {
-		return fmt.Errorf("no shapshots in the image %s", a.imageId)
+		return fmt.Errorf("no snapshots in the image %s", a.imageId)
 	}
 	snapshotId := snapshotIds[0]
 	volumeSize := int32(*a.image.BlockDeviceMappings[0].Ebs.VolumeSize)
@@ -325,7 +323,6 @@ func (a *AwsImage) generate() error {
 		log.Printf("error waiting for the volume state of the volume %s", volumeId)
 	}
 
-	// Step 3: Attach and create disk
 	a.deviceName, err = ahashr.GetAvailableDeviceName()
 	if err != nil {
 		return fmt.Errorf("error getting available device name to attach volume %s: %v", volumeId, err)
@@ -385,7 +382,7 @@ func (a *AwsImage) download() error {
 	}
 	log.Printf("Completed the download of %s to %s", a.archiveName, outputFile)
 
-	return nil // defaul
+	return nil // default
 }
 
 func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
