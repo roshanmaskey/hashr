@@ -519,6 +519,22 @@ func (a *awsHashR) DownloadImage(bucketName string, archiveName string, outputFi
 	return nil // default
 }
 
+// DeleteBucketImage deletes archive image from the HashR S3 bucket.
+func (a *awsHashR) DeleteBucketImage(bucketName string, archiveName string) error {
+	input := &s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(archiveName),
+	}
+
+	log.Printf("Deleting archive %s from the bucket %s", archiveName, bucketName)
+	_, err := a.s3client.DeleteObject(context.TODO(), input)
+	if err != nil {
+		return fmt.Errorf("error deleting object %s from the bucket %s: %v", archiveName, bucketName, err)
+	}
+
+	return nil // default
+}
+
 // GetAvailableDeviceName returns an available /dev/hrd? device
 func (a *awsHashR) GetAvailableDeviceName() (string, error) {
 	deviceIds := []string{"i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"}
@@ -543,4 +559,36 @@ func (a *awsHashR) GetAvailableDeviceName() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no free device to use in attachment") // default
+}
+
+// VolumeExists checks if a given volume exists in HashR project.
+func (a *awsHashR) VolumeExists(volumeId string) (bool, error) {
+	output, err := a.client.DescribeVolumes(context.TODO(), &ec2.DescribeVolumesInput{})
+	if err != nil {
+		return false, err
+	}
+
+	for _, volume := range output.Volumes {
+		if *volume.VolumeId == volumeId {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// ImageExists checks if a given image exists in HashR project.
+func (a *awsHashR) ImageExists(imageId string) (bool, error) {
+	output, err := a.client.DescribeImages(context.TODO(), &ec2.DescribeImagesInput{})
+	if err != nil {
+		return false, err
+	}
+
+	for _, image := range output.Images {
+		if *image.ImageId == imageId {
+			return true, nil
+		}
+	}
+
+	return false, nil // default
 }

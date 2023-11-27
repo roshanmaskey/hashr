@@ -43,6 +43,7 @@ type AwsImage struct {
 	sourceImage     *types.Image // Source Image owned by Amazon
 	deviceName      string       // Device name in EC2
 	archiveName     string       // Disk archive name
+	volumeId        string       // Volume ID of the image
 	maxWaitDuration int          // Maximum time waiting for state to be available
 	localPath       string
 	remotePath      string
@@ -163,7 +164,7 @@ type Repo struct {
 func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []string, maxWaitDuration int, bucketName string, localPath string, remotePath string) (*Repo, error) {
 	// Setup awsHashR object ahashr
 	ahashr = NewAwsHashR()
-	if err:= ahashr.SetupClient(instanceId); err != nil {
+	if err := ahashr.SetupClient(instanceId); err != nil {
 		log.Fatal(err)
 	}
 
@@ -228,7 +229,16 @@ func (a *AwsImage) Preprocess() (string, error) {
 		return "", fmt.Errorf("error downloading disk archive %s from S3 bucket %s: %v", a.archiveName, a.bucketName, err)
 	}
 
-	if err := a.cleanup(); err != nil {
+	// deleteBucketArchive
+	// Determine if we want to keep or delete the archive in HashR AWS S3 bucket.
+	//
+	// Current plan is to leave the archive on AWS S3 bucket.
+	// AWS HashR users should manually delete the archives from the S3 bucket.
+	//
+	// TODO (roshan): Users should provide the value of deleteBucketArchive
+	deleteBucketArchive := false
+
+	if err := a.cleanup(deleteBucketArchive); err != nil {
 		return "", fmt.Errorf("error deleting the archive %s from S3 bucket %s: %v", a.archiveName, a.bucketName, err)
 	}
 
@@ -309,6 +319,7 @@ func (a *AwsImage) generate() error {
 			return err
 		}
 	}
+	a.volumeId = volumeId
 
 	if err := ahashr.waitForVolumeState(volumeId, types.VolumeStateAvailable, a.maxWaitDuration); err != nil {
 		log.Printf("error waiting for the volume state of the volume %s", volumeId)
@@ -377,7 +388,69 @@ func (a *AwsImage) download() error {
 	return nil // defaul
 }
 
-func (a *AwsImage) cleanup() error {
-	// TODO (roshan): Implement the logic
+func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
+	// Delete done file
+	doneFile := filepath.Join(a.remotePath, fmt.Sprintf("%s.done", a.archiveName))
+	log.Printf("Deleting %s on remote system %s", doneFile, ahashr.instanceId)
+
+	remoteCmd := fmt.Sprintf("rm -f %s", doneFile)
+	_, err := ahashr.RunSSHCommand(remoteCmd)
+	if err != nil {
+		return err
+	}
+
+	// Detach volume from EC2 instance
+	if err := ahashr.DetachVolume(a.deviceName, ahashr.instanceId, a.volumeId); err != nil {
+		return err
+	}
+
+	if err := ahashr.waitForVolumeState(a.volumeId, types.VolumeStateAvailable, a.maxWaitDuration); err != nil {
+		return err
+	}
+
+	// Deleting volume
+	if err := ahashr.DeleteVolume(a.volumeId); err != nil {
+		return err
+	}
+
+	for i := 0; i < a.maxWaitDuration; i++ {
+		ok, err := ahashr.VolumeExists(a.volumeId)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			log.Printf("Volume %s is deleted", a.volumeId)
+			break
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	// Deregister image
+	if err := ahashr.DeregisterImage(a.imageId); err != nil {
+		return err
+	}
+
+	for i := 0; i < a.maxWaitDuration; i++ {
+		ok, err := ahashr.ImageExists(a.imageId)
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			log.Printf("Image %s is deleted", a.imageId)
+			break
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	// Delete archive from the bucket
+	if deleteBucketArchive {
+		if err := ahashr.DeleteBucketImage(a.bucketName, a.archiveName); err != nil {
+			return err
+		}
+	}
+
 	return nil // default
 }
