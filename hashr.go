@@ -26,6 +26,7 @@ import (
 	"github.com/google/hashr/core/hashr"
 	gcpExporter "github.com/google/hashr/exporters/gcp"
 	postgresExporter "github.com/google/hashr/exporters/postgres"
+	"github.com/google/hashr/importers/aws"
 	"github.com/google/hashr/importers/deb"
 	"github.com/google/hashr/importers/gcp"
 	"github.com/google/hashr/importers/gcr"
@@ -47,7 +48,7 @@ import (
 
 var (
 	processingWorkerCount  = flag.Int("processing_worker_count", 2, "Number of processing workers.")
-	importersToRun         = flag.String("importers", strings.Join([]string{}, ","), fmt.Sprintf("Importers to be run: %s,%s,%s,%s,%s,%s,%s,%s,%s", gcp.RepoName, targz.RepoName, windows.RepoName, wsus.RepoName, deb.RepoName, rpm.RepoName, zip.RepoName, gcr.RepoName, iso9660.RepoName))
+	importersToRun         = flag.String("importers", strings.Join([]string{}, ","), fmt.Sprintf("Importers to be run: %s,%s,%s,%s,%s,%s,%s,%s,%s,%s", gcp.RepoName, targz.RepoName, windows.RepoName, wsus.RepoName, deb.RepoName, rpm.RepoName, zip.RepoName, gcr.RepoName, iso9660.RepoName, aws.RepoName))
 	exportersToRun         = flag.String("exporters", strings.Join([]string{}, ","), fmt.Sprintf("Exporters to be run: %s,%s", gcpExporter.Name, postgresExporter.Name))
 	jobStorage             = flag.String("storage", "", "Storage that should be used for storing data about processing jobs, can have one of the two values: postgres, cloudspanner")
 	cacheDir               = flag.String("cache_dir", "/tmp/", "Path to cache dir used to store local cache.")
@@ -86,6 +87,15 @@ var (
 	gcrRepos = flag.String("gcr_repos", "", "Comma separated list of GCR (Google Container Registry) repos.")
 	// iso importer flags
 	isoRepoPath = flag.String("iso_repo_path", "", "Path to ISO9660 repository.")
+
+	// AWS importer flags
+	awsOSNames         = flag.String("aws_os_names", "", "Comma separated list of AMI OS. Supported values are windows, ubuntu, debian, rhel, suse")
+	awsOSArchs         = flag.String("aws_os_archs", "x86_64", "Comma separated list of AMI OS architecture. Supported values are x86_64, x86_64_mac, arm64")
+	awsInstanceId      = flag.String("aws_instance_id", "", "EC2 instance ID")
+	awsBucketName      = flag.String("aws_bucket_name", "", "AWS S3 bucket where image will be copied/downloaded")
+	awsRemotePath      = flag.String("aws_remote_path", "/data", "Directory in EC2 instance where image archive will be created")
+	awsLocalPath       = flag.String("aws_local_path", "/data", "Directory where image archive will be copied to")
+	awsMaxWaitDuration = flag.Int("aws_max_wait_duration", 600, "Maxium wait time to complete API operation in seconds")
 )
 
 func main() {
@@ -155,6 +165,16 @@ func main() {
 			}
 			for _, gcrRepo := range strings.Split(*gcrRepos, ",") {
 				r, err := gcr.NewRepo(ctx, tokenSource, gcrRepo)
+				if err != nil {
+					glog.Exit(err)
+				}
+				importers = append(importers, r)
+			}
+
+		case aws.RepoName:
+			osArchs := strings.Split(*awsOSArchs, ",")
+			for _, osname := range strings.Split(*awsOSNames, ",") {
+				r, err := aws.NewRepo(ctx, *awsInstanceId, osname, osArchs, *awsMaxWaitDuration, *awsBucketName, *awsLocalPath, *awsRemotePath)
 				if err != nil {
 					glog.Exit(err)
 				}
