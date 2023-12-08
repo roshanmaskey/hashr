@@ -31,7 +31,7 @@ import (
 
 const (
 	// RepoName contains the repository name.
-	RepoName = "AWS"
+	RepoName = "aws"
 )
 
 var ahashr *awsHashR
@@ -161,17 +161,29 @@ type Repo struct {
 }
 
 // NewRepo returns a new AWS repo.
-func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []string, maxWaitDuration int, bucketName string, localPath string, remotePath string) (*Repo, error) {
+func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []string, maxWaitDuration int, bucketName string, localPath string, remotePath string, user string) (*Repo, error) {
 	// Setup awsHashR object ahashr
 	ahashr = NewAwsHashR()
 	if err := ahashr.SetupClient(instanceId); err != nil {
 		log.Fatal(err)
 	}
 
+	ahashr.instanceId = instanceId
+	ahashr.ec2User = user
+
+	// Setting up SSH client
+	if err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName); err != nil {
+		log.Fatal(err)
+	}
+
 	return &Repo{
-		osName:     osName,
-		osArchs:    osArchs,
-		instanceId: instanceId,
+		osName:          osName,
+		osArchs:         osArchs,
+		instanceId:      instanceId,
+		maxWaitDuration: maxWaitDuration,
+		bucketName:      bucketName,
+		localPath:       localPath,
+		remotePath:      remotePath,
 	}, nil
 }
 
@@ -266,25 +278,30 @@ func (a *AwsImage) copy() error {
 	if err != nil {
 		return err
 	}
+	a.imageId = imageId
 
-	var image *types.Image
+	time.Sleep(10 * time.Second)
 
 	for i := 0; i < a.maxWaitDuration; i++ {
-		image, err = ahashr.GetImageDetail(imageId)
+		time.Sleep(2 * time.Second)
+
+		image, err := ahashr.GetImageDetail(a.imageId)
 		if err != nil {
 			return err
 		}
 
 		if image.State == types.ImageStateAvailable {
+			a.image = image
 			break
 		}
-		time.Sleep(1 * time.Second)
 	}
 
-	log.Printf("image %s is in the state %s", *image.ImageId, image.State)
+	if a.image == nil {
+		return fmt.Errorf("unable to get image details for image ID %s", imageId)
+	}
 
-	a.imageId = imageId
-	a.image = image
+	log.Printf("Image - Image %s (%s) is ready for processing", *a.image.ImageId, a.image.State)
+
 	return nil
 }
 
@@ -302,7 +319,7 @@ func (a *AwsImage) generate() error {
 	volumeSize := int32(*a.image.BlockDeviceMappings[0].Ebs.VolumeSize)
 
 	if len(snapshotIds) > 1 {
-		log.Printf("expecting 1 snapshot, received %d snapshots. Only using snapshot %s", len(snapshotIds), snapshotId)
+		log.Printf("Snapshot - Expecting 1 snapshot, received %d snapshots. Only using snapshot %s", len(snapshotIds), snapshotId)
 	}
 
 	snapshot, err := ahashr.GetSnapshot(snapshotId)
@@ -325,17 +342,18 @@ func (a *AwsImage) generate() error {
 
 	a.deviceName, err = ahashr.GetAvailableDeviceName()
 	if err != nil {
-		return fmt.Errorf("error getting available device name to attach volume %s: %v", volumeId, err)
+		return fmt.Errorf("error getting available device name to attach volume %s: %v", a.volumeId, err)
 	}
 
-	if err := ahashr.AttachVolume(a.deviceName, ahashr.instanceId, volumeId); err != nil {
+	if err := ahashr.AttachVolume(a.deviceName, ahashr.instanceId, a.volumeId); err != nil {
 		return err
 	}
 
-	if err := ahashr.waitForAttachmentState(volumeId, ahashr.instanceId, types.VolumeAttachmentStateAttached, a.maxWaitDuration); err != nil {
+	if err := ahashr.waitForAttachmentState(a.volumeId, ahashr.instanceId, types.VolumeAttachmentStateAttached, a.maxWaitDuration); err != nil {
 		return err
 	}
 
+	log.Printf("DiskArchive - Starting creation of %s", a.archiveName)
 	outputPath := filepath.Join(a.remotePath, a.archiveName)
 	sshcmd := fmt.Sprintf("/usr/local/sbin/hashr-archive %s %s %s", a.deviceName, outputPath, a.bucketName)
 	_, err = ahashr.RunSSHCommand(sshcmd)
@@ -344,7 +362,7 @@ func (a *AwsImage) generate() error {
 	}
 
 	outputDoneFile := fmt.Sprintf("%s.done", filepath.Join(a.remotePath, a.archiveName))
-	log.Printf("Waiting for the generation of archive %s in %s", a.archiveName, outputDoneFile)
+	log.Printf("DiskArchive - Waiting for the generation of archive %s in %s", a.archiveName, outputDoneFile)
 
 	outputGenerated := false
 	for i := 0; i < 2*a.maxWaitDuration; i++ {
@@ -367,7 +385,7 @@ func (a *AwsImage) generate() error {
 		return fmt.Errorf("archive %s is not generated within %d seconds", outputDoneFile, 2*a.maxWaitDuration)
 	}
 
-	log.Printf("Generated archive %s from device %s", a.archiveName, a.deviceName)
+	log.Printf("DiskArchive - Generated archive %s from device %s", a.archiveName, a.deviceName)
 
 	return nil
 }
@@ -376,11 +394,11 @@ func (a *AwsImage) download() error {
 
 	outputFile := filepath.Join(a.localPath, a.archiveName)
 
-	log.Printf("Starting download of %s from S3 bucket %s", a.archiveName, a.bucketName)
+	log.Printf("ArchiveDownload - Starting download of %s from S3 bucket %s", a.archiveName, a.bucketName)
 	if err := ahashr.DownloadImage(a.bucketName, a.archiveName, outputFile); err != nil {
 		return err
 	}
-	log.Printf("Completed the download of %s to %s", a.archiveName, outputFile)
+	log.Printf("ArchiveDownload - Completed the download of %s to %s", a.archiveName, outputFile)
 
 	return nil // default
 }
@@ -388,8 +406,8 @@ func (a *AwsImage) download() error {
 func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 	// Delete done file
 	doneFile := filepath.Join(a.remotePath, fmt.Sprintf("%s.done", a.archiveName))
-	log.Printf("Deleting %s on remote system %s", doneFile, ahashr.instanceId)
 
+	log.Printf("Cleanup - Deleting %s on remote system %s", doneFile, ahashr.instanceId)
 	remoteCmd := fmt.Sprintf("rm -f %s", doneFile)
 	_, err := ahashr.RunSSHCommand(remoteCmd)
 	if err != nil {
@@ -397,6 +415,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 	}
 
 	// Detach volume from EC2 instance
+	log.Printf("Cleanup - Detaching volume %s (%s) from instance %s", a.volumeId, a.deviceName, ahashr.instanceId)
 	if err := ahashr.DetachVolume(a.deviceName, ahashr.instanceId, a.volumeId); err != nil {
 		return err
 	}
@@ -406,6 +425,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 	}
 
 	// Deleting volume
+	log.Printf("Cleanup - Deleting volume %s", a.volumeId)
 	if err := ahashr.DeleteVolume(a.volumeId); err != nil {
 		return err
 	}
@@ -416,7 +436,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 			return err
 		}
 		if !ok {
-			log.Printf("Volume %s is deleted", a.volumeId)
+			log.Printf("VolumeDeletion - Volume %s is deleted", a.volumeId)
 			break
 		}
 
@@ -424,6 +444,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 	}
 
 	// Deregister image
+	log.Printf("Cleanup - Deleting image %s", a.imageId)
 	if err := ahashr.DeregisterImage(a.imageId); err != nil {
 		return err
 	}
@@ -435,7 +456,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 		}
 
 		if !ok {
-			log.Printf("Image %s is deleted", a.imageId)
+			log.Printf("ImageDeletion - Image %s is deleted", a.imageId)
 			break
 		}
 
@@ -443,6 +464,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 	}
 
 	// Delete archive from the bucket
+	log.Printf("Cleanup - Deleting S3 bucket image %s", filepath.Join(a.bucketName, a.archiveName))
 	if deleteBucketArchive {
 		if err := ahashr.DeleteBucketImage(a.bucketName, a.archiveName); err != nil {
 			return err

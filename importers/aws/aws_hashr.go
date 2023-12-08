@@ -146,7 +146,7 @@ func (a *awsHashR) GetAmazonImages(osname string) ([]types.Image, error) {
 
 // GetInstanceDetail returns instance detail.
 func (a *awsHashR) GetInstanceDetail(instanceId string) (*types.Instance, error) {
-	log.Printf("Getting details of the instance %s", instanceId)
+	log.Printf("Instance - Getting details of the instance %s", instanceId)
 
 	filterName := "instance-id"
 	filterValues := []string{instanceId}
@@ -173,14 +173,12 @@ func (a *awsHashR) GetInstanceDetail(instanceId string) (*types.Instance, error)
 		}
 	}
 
-	//fmt.Println(output)
-
 	return nil, fmt.Errorf("unable to find the instance %s", instanceId)
 }
 
 // CopyImage creates a copy of AMI to HashR project and returns the new AMI id.
 func (a *awsHashR) CopyImage(sourceImageId string, sourceRegion string, targetImageName string) (string, error) {
-	log.Printf("Copying image %s from region %s as %s", sourceImageId, sourceRegion, targetImageName)
+	log.Printf("Image - Copying image %s from region %s as %s", sourceImageId, sourceRegion, targetImageName)
 
 	input := &ec2.CopyImageInput{
 		Name:          &targetImageName,
@@ -193,14 +191,14 @@ func (a *awsHashR) CopyImage(sourceImageId string, sourceRegion string, targetIm
 		return "", fmt.Errorf("error copying image %s: %v", sourceImageId, err)
 	}
 
-	log.Printf("Copied image %s as image ID %s", sourceImageId, *output.ImageId)
+	log.Printf("Image - Copied image %s as image ID %s", sourceImageId, *output.ImageId)
 
 	return *output.ImageId, nil // default return
 }
 
 // DeregisterImage deletes AMI from AWS HashR project.
 func (a *awsHashR) DeregisterImage(imageId string) error {
-	log.Printf("Deregistering image %s", imageId)
+	log.Printf("Image - Deregistering image %s", imageId)
 
 	input := &ec2.DeregisterImageInput{
 		ImageId: &imageId,
@@ -211,7 +209,7 @@ func (a *awsHashR) DeregisterImage(imageId string) error {
 		return fmt.Errorf("error deregistering image %s: %v", imageId, err)
 	}
 
-	log.Printf("Deregistered image %s", imageId)
+	log.Printf("Image - Deregistered image %s", imageId)
 	return nil
 }
 
@@ -238,7 +236,7 @@ func (a *awsHashR) GetImageDetail(imageId string) (*types.Image, error) {
 
 // GetSnapshot returns the detail of a specified snapshot.
 func (a *awsHashR) GetSnapshot(snapshotId string) (*types.Snapshot, error) {
-	log.Printf("Getting details of the snapshot %s", snapshotId)
+	log.Printf("Snapshot - Getting details of the snapshot %s", snapshotId)
 
 	filterName := "snapshot-id"
 	filterValues := []string{snapshotId}
@@ -266,7 +264,7 @@ func (a *awsHashR) GetSnapshot(snapshotId string) (*types.Snapshot, error) {
 
 // GetSnapshotState returns the state of a specified snapshot.
 func (a *awsHashR) GetSnapshotState(snapshotId string) (types.SnapshotState, error) {
-	log.Printf("Getting state of the snapshot %s", snapshotId)
+	log.Printf("Snapshot - Getting state of the snapshot %s", snapshotId)
 
 	snapshot, err := a.GetSnapshot(snapshotId)
 	if err != nil {
@@ -278,7 +276,7 @@ func (a *awsHashR) GetSnapshotState(snapshotId string) (types.SnapshotState, err
 
 // CreateVolume creates a volume based on the specified snapshot in the specified region.
 func (a *awsHashR) CreateVolume(snapshotId string, diskSizeInGB int32, region string) (string, error) {
-	log.Printf("Creating volume from snapshot %s in the region %s", snapshotId, region)
+	log.Printf("Volume - Creating volume from snapshot %s in the region %s", snapshotId, region)
 
 	input := &ec2.CreateVolumeInput{
 		SnapshotId:       &snapshotId,
@@ -292,7 +290,7 @@ func (a *awsHashR) CreateVolume(snapshotId string, diskSizeInGB int32, region st
 		return "", fmt.Errorf("error creating a volume from the snapshot %s: %v", snapshotId, err)
 	}
 
-	log.Printf("Created the volume %s from the snapshot %s", *output.VolumeId, snapshotId)
+	log.Printf("Volume - Created the volume %s from the snapshot %s", *output.VolumeId, snapshotId)
 
 	if err := a.waitForVolumeState(*output.VolumeId, types.VolumeStateAvailable, 600); err != nil {
 		return "", err
@@ -303,7 +301,7 @@ func (a *awsHashR) CreateVolume(snapshotId string, diskSizeInGB int32, region st
 
 // DeleteVolume deletes the volume in the AWS HashR project.
 func (a *awsHashR) DeleteVolume(volumeId string) error {
-	log.Printf("Deleting the volume %s", volumeId)
+	log.Printf("Volume - Deleting the volume %s", volumeId)
 
 	input := &ec2.DeleteVolumeInput{
 		VolumeId: &volumeId,
@@ -314,7 +312,7 @@ func (a *awsHashR) DeleteVolume(volumeId string) error {
 		return fmt.Errorf("error deleting the volume %s: %v", volumeId, err)
 	}
 
-	log.Printf("Deleted the volume %s", volumeId)
+	log.Printf("Volume - Deleted the volume %s", volumeId)
 	return nil
 }
 
@@ -366,7 +364,7 @@ func (a *awsHashR) GetVolumeAttachment(volumeId string) ([]types.VolumeAttachmen
 
 // AttachVolume attaches the specified volume to the EC2 instance.
 func (a *awsHashR) AttachVolume(deviceId string, instanceId string, volumeId string) error {
-	log.Printf("Attaching the volume %s (device %s) to the instance %s", volumeId, deviceId, instanceId)
+	log.Printf("Volume - Attaching the volume %s (device %s) to the instance %s", volumeId, deviceId, instanceId)
 
 	input := &ec2.AttachVolumeInput{
 		Device:     &deviceId,
@@ -379,14 +377,14 @@ func (a *awsHashR) AttachVolume(deviceId string, instanceId string, volumeId str
 		return fmt.Errorf("error attaching the volume %s to the instance %s: %v", volumeId, instanceId, err)
 	}
 
-	log.Printf("Attached the volume %s to the instance %s as the device %s", volumeId, instanceId, *output.Device)
+	log.Printf("Volume - Attached the volume %s to the instance %s as the device %s", volumeId, instanceId, *output.Device)
 
 	return nil //default
 }
 
 // DetachVolume detaches the volume from the specified instance.
 func (a *awsHashR) DetachVolume(deviceId string, instanceId string, volumeId string) error {
-	log.Printf("Detaching the volume %s (device %s) from the instance %s", volumeId, deviceId, instanceId)
+	log.Printf("Volume - Detaching the volume %s (device %s) from the instance %s", volumeId, deviceId, instanceId)
 
 	input := &ec2.DetachVolumeInput{
 		VolumeId:   &volumeId,
@@ -407,13 +405,13 @@ func (a *awsHashR) waitForVolumeState(volumeId string, targetState types.VolumeS
 	for i := 0; i < maxWaitDuration; i++ {
 		state, err := a.GetVolumeState(volumeId)
 		if err != nil {
-			log.Printf("Unable to get the state of the volume %s: %v", volumeId, err)
+			log.Printf("Volume - Unable to get the state of the volume %s: %v", volumeId, err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		if state == targetState {
-			log.Printf("Volume %s is in the target state %s", volumeId, targetState)
+			log.Printf("Volume - %s is in the target state %s", volumeId, targetState)
 			return nil
 		}
 	}
@@ -428,14 +426,14 @@ func (a *awsHashR) waitForAttachmentState(volumeId string, instanceId string, ta
 	for i := 0; i < maxWaitDuration; i++ {
 		attachments, err := a.GetVolumeAttachment(volumeId)
 		if err != nil {
-			glog.Errorf("Unable to get the attachment details for the volume %s: %v", volumeId, err)
+			glog.Errorf("Volume - Unable to get the attachment details for the volume %s: %v", volumeId, err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		for _, attachment := range attachments {
 			if attachment.State == targetState && *attachment.InstanceId == instanceId {
-				log.Printf("Volume %s is attached to the instance %s in the state %s", volumeId, instanceId, targetState)
+				log.Printf("Volume - %s is attached to the instance %s in the state %s", volumeId, instanceId, targetState)
 				return nil
 			}
 		}
@@ -525,7 +523,7 @@ func (a *awsHashR) DeleteBucketImage(bucketName string, archiveName string) erro
 		Key:    aws.String(archiveName),
 	}
 
-	log.Printf("Deleting archive %s from the bucket %s", archiveName, bucketName)
+	log.Printf("DiskArchive - Deleting archive %s from the bucket %s", archiveName, bucketName)
 	_, err := a.s3client.DeleteObject(context.TODO(), input)
 	if err != nil {
 		return fmt.Errorf("error deleting object %s from the bucket %s: %v", archiveName, bucketName, err)
