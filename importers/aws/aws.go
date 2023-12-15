@@ -27,6 +27,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/google/hashr/core/hashr"
+	"github.com/google/hashr/importers/common"
 )
 
 const (
@@ -45,7 +46,7 @@ type AwsImage struct {
 	archiveName     string       // Disk archive name
 	volumeId        string       // Volume ID of the image
 	maxWaitDuration int          // Maximum time waiting for state to be available
-	localPath       string
+	localTarGzPath  string
 	remotePath      string
 	bucketName      string
 	quickSha256hash string
@@ -55,9 +56,9 @@ func NewAwsImage() *AwsImage {
 	return &AwsImage{}
 }
 
-// ID returns the unique AMI in HashR project.
+// ID returns the source AMI in HashR project.
 func (a *AwsImage) ID() string {
-	return a.imageId
+	return a.sourceImageId
 }
 
 // SourceID returns the unique AMI of the source owned by Amazon.
@@ -81,7 +82,7 @@ func (a *AwsImage) RepoPath() string {
 
 // LocalPath returns the image local path.
 func (a *AwsImage) LocalPath() string {
-	return a.localPath
+	return a.localTarGzPath
 }
 
 // RemotePath returns the image remote path.
@@ -161,7 +162,7 @@ type Repo struct {
 }
 
 // NewRepo returns a new AWS repo.
-func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []string, maxWaitDuration int, bucketName string, localPath string, remotePath string, user string) (*Repo, error) {
+func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []string, maxWaitDuration int, bucketName string, remotePath string, user string) (*Repo, error) {
 	// Setup awsHashR object ahashr
 	ahashr = NewAwsHashR()
 	if err := ahashr.SetupClient(instanceId); err != nil {
@@ -182,7 +183,6 @@ func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []st
 		instanceId:      instanceId,
 		maxWaitDuration: maxWaitDuration,
 		bucketName:      bucketName,
-		localPath:       localPath,
 		remotePath:      remotePath,
 	}, nil
 }
@@ -213,10 +213,10 @@ func (r *Repo) DiscoverRepo() ([]hashr.Source, error) {
 		awsimage := &AwsImage{
 			sourceImageId:   *image.ImageId,
 			sourceImage:     &image,
-			archiveName:     fmt.Sprintf("%s-raw.dd.gz", *image.ImageId),
+			archiveName:     fmt.Sprintf("%s-raw.tar.gz", *image.ImageId),
 			maxWaitDuration: r.maxWaitDuration,
 			bucketName:      r.bucketName,
-			localPath:       r.localPath,
+			localTarGzPath:  r.localPath,
 			remotePath:      r.remotePath,
 		}
 
@@ -254,7 +254,14 @@ func (a *AwsImage) Preprocess() (string, error) {
 		return "", fmt.Errorf("error deleting the archive %s from S3 bucket %s: %v", a.archiveName, a.bucketName, err)
 	}
 
-	return "", nil // default
+	baseDir, _ := filepath.Split(a.localTarGzPath)
+	extractionDir := filepath.Join(baseDir, "extracted")
+
+	if err := common.ExtractTarGz(a.localTarGzPath, extractionDir); err != nil {
+		return "", fmt.Errorf("error extracting %s to %s: %v", a.localTarGzPath, extractionDir, err)
+	}
+
+	return filepath.Join(extractionDir, strings.Replace(a.archiveName, ".tar.gz", "", -1)), nil
 }
 
 func (a *AwsImage) copy() error {
@@ -391,14 +398,18 @@ func (a *AwsImage) generate() error {
 }
 
 func (a *AwsImage) download() error {
-
-	outputFile := filepath.Join(a.localPath, a.archiveName)
-
-	log.Printf("ArchiveDownload - Starting download of %s from S3 bucket %s", a.archiveName, a.bucketName)
-	if err := ahashr.DownloadImage(a.bucketName, a.archiveName, outputFile); err != nil {
+	tempDir, err := common.LocalTempDir(a.ID())
+	if err != nil {
 		return err
 	}
-	log.Printf("ArchiveDownload - Completed the download of %s to %s", a.archiveName, outputFile)
+
+	a.localTarGzPath = filepath.Join(tempDir, a.archiveName)
+
+	log.Printf("ArchiveDownload - Starting download of %s from S3 bucket %s", a.archiveName, a.bucketName)
+	if err := ahashr.DownloadImage(a.bucketName, a.archiveName, a.localTarGzPath); err != nil {
+		return err
+	}
+	log.Printf("ArchiveDownload - Completed the download of %s to %s", a.archiveName, a.localTarGzPath)
 
 	return nil // default
 }

@@ -19,8 +19,8 @@ limitations under the License.
 package aws
 
 import (
-	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -35,7 +35,7 @@ var configdata map[string]interface{}
 
 func loadTestingConfig() {
 	configfile := filepath.Join("testdata", "test_config.yaml")
-	data, err := ioutil.ReadFile(configfile)
+	data, err := os.ReadFile(configfile)
 	if err != nil {
 		log.Fatalf("failed reading config file: %v", err)
 	}

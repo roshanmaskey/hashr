@@ -414,6 +414,8 @@ func (a *awsHashR) waitForVolumeState(volumeId string, targetState types.VolumeS
 			log.Printf("Volume - %s is in the target state %s", volumeId, targetState)
 			return nil
 		}
+
+		time.Sleep(1 * time.Second)
 	}
 
 	return fmt.Errorf("volume %s is not in the target state %s within %d seconds", volumeId, targetState, maxWaitDuration)

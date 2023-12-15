@@ -40,7 +40,7 @@ func TestPreprocess(t *testing.T) {
 	awsimage.sourceImageId = config["sourceimageid"].(string)
 	awsimage.archiveName = fmt.Sprintf("%s-raw.dd.gz", awsimage.sourceImageId)
 	awsimage.bucketName = config["bucketname"].(string)
-	awsimage.localPath = config["localpath"].(string)
+	awsimage.localTarGzPath = config["localpath"].(string)
 	awsimage.remotePath = config["remotepath"].(string)
 	awsimage.maxWaitDuration = config["maxWaitDuration"].(int)
 
