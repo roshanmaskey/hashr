@@ -60,27 +60,13 @@ func NewAwsHashR() *awsHashR {
 }
 
 // SetupClient setups client and loads configuration to config.
-func (a *awsHashR) SetupClient(instanceId string) error {
-	if instanceId == "" {
-		return fmt.Errorf("instance ID is required")
-	}
-
+func (a *awsHashR) SetupClient() error {
 	a.config, err = config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return err
 	}
 
 	a.client = ec2.NewFromConfig(a.config)
-
-	instance, err := a.GetInstanceDetail(instanceId)
-	if err != nil {
-		return err
-	}
-
-	a.ec2PublicDnsName = *instance.PublicDnsName
-	a.ec2Keyname = *instance.KeyName
-	a.region = *instance.Placement.AvailabilityZone
-
 	a.s3client = s3.NewFromConfig(a.config)
 
 	return nil
@@ -174,6 +160,61 @@ func (a *awsHashR) GetInstanceDetail(instanceId string) (*types.Instance, error)
 	}
 
 	return nil, fmt.Errorf("unable to find the instance %s", instanceId)
+}
+
+// IsAVailableInstance returns true if the EC2 instance is in use for processing HashR.
+func (a *awsHashR) IsAvailableInstance(instanceId string) (bool, error) {
+	input := &ec2.DescribeTagsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("resource-id"),
+				Values: []string{instanceId},
+			},
+		},
+	}
+
+	output, err := a.client.DescribeTags(context.TODO(), input)
+	if err != nil {
+		return false, fmt.Errorf("error getting tags for %s: %v", instanceId, err)
+	}
+
+	for _, tag := range output.Tags {
+		if *tag.Key != "InUse" {
+			continue
+		}
+
+		switch strings.ToLower(*tag.Value) {
+		case "true":
+			return false, nil
+		case "false":
+			return true, nil
+		default:
+			return false, fmt.Errorf("unexpected tag for %sInUse:%s", instanceId, *tag.Value)
+		}
+	}
+
+	// default
+	return false, fmt.Errorf("no tags for %s", instanceId)
+}
+
+// SetInstanceTag sets removes value of tag InUse.
+func (a *awsHashR) SetInstanceTag(instanceId string, tagName string, tagValue string) error {
+	input := &ec2.CreateTagsInput{
+		Resources: []string{instanceId},
+		Tags: []types.Tag{
+			{
+				Key:   aws.String(tagName),
+				Value: aws.String(tagValue),
+			},
+		},
+	}
+
+	_, err := a.client.CreateTags(context.TODO(), input)
+	if err != nil {
+		return fmt.Errorf("error adding tag on %s: %v", instanceId, err)
+	}
+
+	return nil
 }
 
 // CopyImage creates a copy of AMI to HashR project and returns the new AMI id.
@@ -406,7 +447,7 @@ func (a *awsHashR) waitForVolumeState(volumeId string, targetState types.VolumeS
 		state, err := a.GetVolumeState(volumeId)
 		if err != nil {
 			log.Printf("Volume - Unable to get the state of the volume %s: %v", volumeId, err)
-			time.Sleep(1 * time.Second)
+			time.Sleep(15 * time.Second)
 			continue
 		}
 
@@ -415,7 +456,7 @@ func (a *awsHashR) waitForVolumeState(volumeId string, targetState types.VolumeS
 			return nil
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(15 * time.Second)
 	}
 
 	return fmt.Errorf("volume %s is not in the target state %s within %d seconds", volumeId, targetState, maxWaitDuration)
@@ -429,7 +470,7 @@ func (a *awsHashR) waitForAttachmentState(volumeId string, instanceId string, ta
 		attachments, err := a.GetVolumeAttachment(volumeId)
 		if err != nil {
 			glog.Errorf("Volume - Unable to get the attachment details for the volume %s: %v", volumeId, err)
-			time.Sleep(1 * time.Second)
+			time.Sleep(15 * time.Second)
 			continue
 		}
 
@@ -440,7 +481,7 @@ func (a *awsHashR) waitForAttachmentState(volumeId string, instanceId string, ta
 			}
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(15 * time.Second)
 	}
 
 	return fmt.Errorf("volume %s did not attach to the instance %s within %d seconds", volumeId, instanceId, maxWaitDuration)

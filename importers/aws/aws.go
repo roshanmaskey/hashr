@@ -162,15 +162,49 @@ type Repo struct {
 }
 
 // NewRepo returns a new AWS repo.
-func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []string, maxWaitDuration int, bucketName string, remotePath string, user string) (*Repo, error) {
+func NewRepo(ctx context.Context, instanceIds []string, osName string, osArchs []string, maxWaitDuration int, bucketName string, remotePath string, user string) (*Repo, error) {
 	// Setup awsHashR object ahashr
 	ahashr = NewAwsHashR()
-	if err := ahashr.SetupClient(instanceId); err != nil {
+
+	if err := ahashr.SetupClient(); err != nil {
 		log.Fatal(err)
 	}
 
-	ahashr.instanceId = instanceId
-	ahashr.ec2User = user
+	for _, instanceId := range instanceIds {
+		ok, err := ahashr.IsAvailableInstance(instanceId)
+		if err != nil {
+			log.Printf("%v", err)
+			continue
+		}
+
+		if !ok {
+			log.Printf("Instance %s is in use: %v", instanceId, ok)
+			continue
+		}
+
+		instance, err := ahashr.GetInstanceDetail(instanceId)
+		if err != nil {
+			log.Printf("error getting instance detail for %s: %v", instanceId, err)
+			continue
+		}
+
+		if err := ahashr.SetInstanceTag(instanceId, "InUse", "true"); err != nil {
+			log.Printf("error setting InUse for %s: %v", instanceId, err)
+			continue
+		}
+
+		ahashr.instanceId = instanceId
+		ahashr.ec2User = user
+		ahashr.ec2Keyname = *instance.KeyName
+		ahashr.ec2PublicDnsName = *instance.PublicDnsName
+		ahashr.region = *instance.Placement.AvailabilityZone
+
+		break
+	}
+
+	if ahashr.instanceId == "" {
+		return nil, fmt.Errorf("no available instance")
+	}
 
 	// Setting up SSH client
 	if err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName); err != nil {
@@ -180,7 +214,7 @@ func NewRepo(ctx context.Context, instanceId string, osName string, osArchs []st
 	return &Repo{
 		osName:          osName,
 		osArchs:         osArchs,
-		instanceId:      instanceId,
+		instanceId:      ahashr.instanceId,
 		maxWaitDuration: maxWaitDuration,
 		bucketName:      bucketName,
 		remotePath:      remotePath,
@@ -213,7 +247,7 @@ func (r *Repo) DiscoverRepo() ([]hashr.Source, error) {
 		awsimage := &AwsImage{
 			sourceImageId:   *image.ImageId,
 			sourceImage:     &image,
-			archiveName:     fmt.Sprintf("%s-raw.tar.gz", *image.ImageId),
+			archiveName:     fmt.Sprintf("%s.raw.tar.gz", *image.ImageId),
 			maxWaitDuration: r.maxWaitDuration,
 			bucketName:      r.bucketName,
 			localTarGzPath:  r.localPath,
@@ -262,6 +296,7 @@ func (a *AwsImage) Preprocess() (string, error) {
 	}
 
 	return filepath.Join(extractionDir, strings.Replace(a.archiveName, ".tar.gz", "", -1)), nil
+
 }
 
 func (a *AwsImage) copy() error {
@@ -290,7 +325,7 @@ func (a *AwsImage) copy() error {
 	time.Sleep(10 * time.Second)
 
 	for i := 0; i < a.maxWaitDuration; i++ {
-		time.Sleep(2 * time.Second)
+		time.Sleep(10 * time.Second)
 
 		image, err := ahashr.GetImageDetail(a.imageId)
 		if err != nil {
@@ -362,21 +397,22 @@ func (a *AwsImage) generate() error {
 
 	log.Printf("DiskArchive - Starting creation of %s", a.archiveName)
 	outputPath := filepath.Join(a.remotePath, a.archiveName)
-	sshcmd := fmt.Sprintf("/usr/local/sbin/hashr-archive %s %s %s", a.deviceName, outputPath, a.bucketName)
+	sshcmd := fmt.Sprintf("nice -n -10 /usr/local/sbin/hashr-archive %s %s %s", a.deviceName, outputPath, a.bucketName)
 	_, err = ahashr.RunSSHCommand(sshcmd)
 	if err != nil {
 		return err
 	}
 
 	outputDoneFile := fmt.Sprintf("%s.done", filepath.Join(a.remotePath, a.archiveName))
-	log.Printf("DiskArchive - Waiting for the generation of archive %s in %s", a.archiveName, outputDoneFile)
+	log.Printf("DiskArchive - Waiting for the generation of archive %s (%s)", a.archiveName, outputDoneFile)
 
 	outputGenerated := false
-	for i := 0; i < 2*a.maxWaitDuration; i++ {
+	for i := 0; i < a.maxWaitDuration; i++ {
 		sshcmd := fmt.Sprintf("ls %s", outputDoneFile)
 		out, err := ahashr.RunSSHCommand(sshcmd)
 		if err != nil {
-			time.Sleep(1 * time.Second)
+			log.Printf("No %s: %v", outputDoneFile, err)
+			time.Sleep(15 * time.Second)
 			continue
 		}
 
@@ -385,11 +421,11 @@ func (a *AwsImage) generate() error {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(15 * time.Second)
 	}
 
 	if !outputGenerated {
-		return fmt.Errorf("archive %s is not generated within %d seconds", outputDoneFile, 2*a.maxWaitDuration)
+		return fmt.Errorf("archive %s is not generated within %d seconds", outputDoneFile, 15*a.maxWaitDuration)
 	}
 
 	log.Printf("DiskArchive - Generated archive %s from device %s", a.archiveName, a.deviceName)
@@ -451,7 +487,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(15 * time.Second)
 	}
 
 	// Deregister image
@@ -471,7 +507,7 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(15 * time.Second)
 	}
 
 	// Delete archive from the bucket
@@ -480,6 +516,11 @@ func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
 		if err := ahashr.DeleteBucketImage(a.bucketName, a.archiveName); err != nil {
 			return err
 		}
+	}
+
+	// Remove InUse tag from instance
+	if err := ahashr.SetInstanceTag(ahashr.instanceId, "InUse", "false"); err != nil {
+		return fmt.Errorf("error removing InUse for %s: %v", ahashr.instanceId, err)
 	}
 
 	return nil // default

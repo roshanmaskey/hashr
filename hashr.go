@@ -92,7 +92,7 @@ var (
 	awsOSNames         = flag.String("aws_os_names", "", "Comma separated list of AMI OS. Supported values are windows, ubuntu, debian, rhel, suse")
 	awsOSArchs         = flag.String("aws_os_archs", "x86_64", "Comma separated list of AMI OS architecture. Supported values are x86_64, x86_64_mac, arm64")
 	awsUser            = flag.String("aws_user", "ec2-user", "EC2 user name for SSH")
-	awsInstanceId      = flag.String("aws_instance_id", "", "EC2 instance ID")
+	awsInstanceIds     = flag.String("aws_instance_id", "", "Comma seperated EC2 instance IDs")
 	awsBucketName      = flag.String("aws_bucket_name", "", "AWS S3 bucket where image will be copied/downloaded")
 	awsRemotePath      = flag.String("aws_remote_path", "/data", "Directory in EC2 instance where image archive will be created")
 	awsMaxWaitDuration = flag.Int("aws_max_wait_duration", 600, "Maxium wait time to complete API operation in seconds")
@@ -173,8 +173,9 @@ func main() {
 
 		case aws.RepoName, strings.ToLower(aws.RepoName):
 			osArchs := strings.Split(*awsOSArchs, ",")
+			instanceIds := strings.Split(*awsInstanceIds, ",")
 			for _, osname := range strings.Split(*awsOSNames, ",") {
-				r, err := aws.NewRepo(ctx, *awsInstanceId, osname, osArchs, *awsMaxWaitDuration, *awsBucketName, *awsRemotePath, *awsUser)
+				r, err := aws.NewRepo(ctx, instanceIds, osname, osArchs, *awsMaxWaitDuration, *awsBucketName, *awsRemotePath, *awsUser)
 				if err != nil {
 					glog.Exit(err)
 				}

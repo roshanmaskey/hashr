@@ -54,9 +54,17 @@ func newTestAwsHashR() *awsHashR {
 	ahashr.instanceId = config["instanceid"].(string)
 	ahashr.ec2User = config["user"].(string)
 
-	if err := ahashr.SetupClient(ahashr.instanceId); err != nil {
+	if err := ahashr.SetupClient(); err != nil {
 		log.Fatal(err)
 	}
+
+	instance, err := ahashr.GetInstanceDetail(ahashr.instanceId)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ahashr.ec2Keyname = *instance.KeyName
+	ahashr.ec2PublicDnsName = *instance.PublicDnsName
+	ahashr.region = *instance.Placement.AvailabilityZone
 
 	if err := ahashr.SSHClientSetup(ahashr.ec2User, ahashr.ec2Keyname, ahashr.ec2PublicDnsName); err != nil {
 		log.Fatal(err)
@@ -103,6 +111,60 @@ func TestGetInstanceDetailPlacementAvailabilityZone(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.NotEqual(t, "", *instance.Placement.AvailabilityZone)
+}
+
+func TestIsAvailableInstanceTrue(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	instanceId := ahashr.instanceId
+
+	err := ahashr.SetInstanceTag(instanceId, "InUse", "true")
+	assert.Nil(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	ok, err := ahashr.IsAvailableInstance(instanceId)
+	assert.Nil(t, err)
+	assert.Equal(t, true, ok)
+}
+
+func TestIsAvailableInstanceFalse(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	instanceId := ahashr.instanceId
+
+	err := ahashr.SetInstanceTag(instanceId, "InUse", "false")
+	assert.Nil(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	ok, err := ahashr.IsAvailableInstance(instanceId)
+	assert.Nil(t, err)
+	assert.Equal(t, false, ok)
+}
+
+func TestIsAvailableInstanceError(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	instanceId := ahashr.instanceId
+
+	err := ahashr.SetInstanceTag(instanceId, "InUse", "na")
+	assert.Nil(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	ok, err := ahashr.IsAvailableInstance(instanceId)
+	assert.NotNil(t, err)
+	assert.Equal(t, false, ok)
+}
+
+func TestSetInstanceTag(t *testing.T) {
+	ahashr := newTestAwsHashR()
+
+	instanceId := ahashr.instanceId
+	var err error
+	err = ahashr.SetInstanceTag(instanceId, "InUse", "false")
+	assert.Nil(t, err)
 }
 
 func TestGetAmazonImages(t *testing.T) {
