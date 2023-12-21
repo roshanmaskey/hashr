@@ -35,9 +35,8 @@ const (
 	RepoName = "aws"
 )
 
-var ahashr *awsHashR
-
 type AwsImage struct {
+	ahashr          *awsHashR
 	imageId         string       // AMI in HashR project
 	image           *types.Image // Image in HashR project
 	sourceImageId   string       // AMI owned by AWS
@@ -92,6 +91,8 @@ func (a *AwsImage) RemotePath() string {
 
 // QuickSHA256Hash calculates and returns the SHA256 hash of the image attributes.
 func (a *AwsImage) QuickSHA256Hash() (string, error) {
+	ahashr := a.ahashr
+
 	// Check if the quick hash was already calculated.
 	if a.quickSha256hash != "" {
 		return a.quickSha256hash, nil
@@ -151,6 +152,7 @@ func (a *AwsImage) Description() string {
 ///
 
 type Repo struct {
+	ahashr          *awsHashR
 	osName          string      // Repo filtered by OS name
 	osArchs         []string    // Repo filtered by OS architectures
 	instanceId      string      // EC2 instance
@@ -164,7 +166,7 @@ type Repo struct {
 // NewRepo returns a new AWS repo.
 func NewRepo(ctx context.Context, instanceIds []string, osName string, osArchs []string, maxWaitDuration int, bucketName string, remotePath string, user string) (*Repo, error) {
 	// Setup awsHashR object ahashr
-	ahashr = NewAwsHashR()
+	ahashr := NewAwsHashR()
 
 	if err := ahashr.SetupClient(); err != nil {
 		log.Fatal(err)
@@ -212,6 +214,7 @@ func NewRepo(ctx context.Context, instanceIds []string, osName string, osArchs [
 	}
 
 	return &Repo{
+		ahashr:          ahashr,
 		osName:          osName,
 		osArchs:         osArchs,
 		instanceId:      ahashr.instanceId,
@@ -233,6 +236,8 @@ func (r *Repo) RepoPath() string {
 
 // DiscoverRepo traverses the repository and looks for the AMIs.
 func (r *Repo) DiscoverRepo() ([]hashr.Source, error) {
+	ahashr := r.ahashr
+
 	var sources []hashr.Source
 
 	images, err := ahashr.GetAmazonImages(r.osName)
@@ -245,6 +250,7 @@ func (r *Repo) DiscoverRepo() ([]hashr.Source, error) {
 
 	for _, image := range images {
 		awsimage := &AwsImage{
+			ahashr:          r.ahashr,
 			sourceImageId:   *image.ImageId,
 			sourceImage:     &image,
 			archiveName:     fmt.Sprintf("%s.raw.tar.gz", *image.ImageId),
@@ -258,6 +264,7 @@ func (r *Repo) DiscoverRepo() ([]hashr.Source, error) {
 		sources = append(sources, awsimage)
 	}
 
+	log.Printf("DiscoverRepo - %d images discovered", len(sources))
 	return sources, nil
 }
 
@@ -300,6 +307,8 @@ func (a *AwsImage) Preprocess() (string, error) {
 }
 
 func (a *AwsImage) copy() error {
+	ahashr := a.ahashr
+
 	// Source image and ID is required
 	if a.sourceImageId == "" {
 		return fmt.Errorf("source AMI does not exist")
@@ -348,6 +357,8 @@ func (a *AwsImage) copy() error {
 }
 
 func (a *AwsImage) generate() error {
+	ahashr := a.ahashr
+
 	var snapshotIds []string
 
 	for _, blockdevice := range a.image.BlockDeviceMappings {
@@ -395,7 +406,7 @@ func (a *AwsImage) generate() error {
 		return err
 	}
 
-	log.Printf("DiskArchive - Starting creation of %s", a.archiveName)
+	log.Printf("DiskArchive - Starting creation of %s on %s", a.archiveName, ahashr.instanceId)
 	outputPath := filepath.Join(a.remotePath, a.archiveName)
 	sshcmd := fmt.Sprintf("nice -n -10 /usr/local/sbin/hashr-archive %s %s %s", a.deviceName, outputPath, a.bucketName)
 	_, err = ahashr.RunSSHCommand(sshcmd)
@@ -434,6 +445,8 @@ func (a *AwsImage) generate() error {
 }
 
 func (a *AwsImage) download() error {
+	ahashr := a.ahashr
+
 	tempDir, err := common.LocalTempDir(a.ID())
 	if err != nil {
 		return err
@@ -451,6 +464,8 @@ func (a *AwsImage) download() error {
 }
 
 func (a *AwsImage) cleanup(deleteBucketArchive bool) error {
+	ahashr := a.ahashr
+
 	// Delete done file
 	doneFile := filepath.Join(a.remotePath, fmt.Sprintf("%s.done", a.archiveName))
 
